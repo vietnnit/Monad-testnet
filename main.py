@@ -70,7 +70,10 @@ def get_available_scripts(language):
             {"name": "10. Uniswap Swap x Monad Tesnet", "value": "uniswap"},
             {"name": "11. Deploy Contract x Monad Tesnet", "value": "deploy"},
             {"name": "12. Send TX ngẫu nhiên hoặc Send TX địa chỉ File (address.txt) x Monad Tesnet", "value": "sendtx"},
-            {"name": "13. Thoát", "value": "exit"},
+            {"name": "13. Bima Deposit bmBTC ( Coming soon )", "value": "exit"},
+            {"name": "14. Nad domain ( Coming soon )", "value": "exit"},
+            {"name": "15. shMONAD Staking ( Coming soon )", "value": "exit"},
+            {"name": "16. Thoát", "value": "exit"},
             
         ],
         'en': [
@@ -86,7 +89,10 @@ def get_available_scripts(language):
             {"name": "10. Uniswap Swap x Monad Tesnet", "value": "uniswap"},
             {"name": "11. Deploy Contract x Monad Tesnet", "value": "deploy"},
             {"name": "12. Send Random TX or Send TX File Address (address.txt) x Monad Tesnet", "value": "sendtx"},
-            {"name": "13. Exit", "value": "exit"},
+            {"name": "13. Bima Deposit bmBTC ( Coming soon )", "value": "exit"},
+            {"name": "14. Nad domain ( Coming soon )", "value": "exit"},
+            {"name": "15. shMONAD Staking ( Coming soon )", "value": "exit"},
+            {"name": "16. Thoát", "value": "exit"},
         ]
     }
     return scripts[language]
