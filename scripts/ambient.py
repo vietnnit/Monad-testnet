@@ -1,500 +1,433 @@
-import os
 import asyncio
 import random
-import time
-from web3 import Web3
+from typing import Dict, List, Optional, Tuple
+from eth_account import Account
+from eth_abi import abi
+from decimal import Decimal
+from loguru import logger
+from web3 import AsyncWeb3, Web3
+import aiohttp
 from colorama import init, Fore, Style
 
 # Khởi tạo colorama
 init(autoreset=True)
 
-# Constants
+# Định nghĩa các hằng số cố định
 RPC_URL = "https://testnet-rpc.monad.xyz/"
-EXPLORER_URL = "https://testnet.monadexplorer.com/tx/"
-ROUTER_ADDRESS = Web3.to_checksum_address("0x88B96aF200c8a9c35442C8AC6cd3D22695AaE4F0")
+EXPLORER_URL = "https://testnet.monadexplorer.com/tx/0x"
+AMBIENT_CONTRACT = "0x88B96aF200c8a9c35442C8AC6cd3D22695AaE4F0"
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+POOL_IDX = 36000
+RESERVE_FLAGS = 0
+TIP = 0
+MAX_SQRT_PRICE = 21267430153580247136652501917186561137
+MIN_SQRT_PRICE = 65537
+BORDER_WIDTH = 80  # Độ rộng viền cho giao diện
+ATTEMPTS = 3
+PAUSE_BETWEEN_SWAPS = [5, 10]
+PAUSE_BETWEEN_ACTIONS = [5, 15]
 
-# Danh sách token với địa chỉ checksum
-TOKENS = {
-    "USDC": {
-        "address": Web3.to_checksum_address("0xf817257fed379853cde0fa4f97ab987181b1e5ea"),
-        "symbol": "USDC",
-        "name": "USD Coin",
-        "minAmount": 0.01,
-        "maxAmount": 1,
-        "decimals": 6,
-    },
-    "USDT": {
-        "address": Web3.to_checksum_address("0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D"),
-        "symbol": "USDT",
-        "name": "Tether USD",
-        "minAmount": 0.01,
-        "maxAmount": 1,
-        "decimals": 6,
-    },
-    "WETH": {
-        "address": Web3.to_checksum_address("0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37"),
-        "symbol": "WETH",
-        "name": "Wrapped ETH",
-        "minAmount": 0.0000001,
-        "maxAmount": 0.000001,
-        "decimals": 18,
-    },
+AMBIENT_TOKENS = {
+    "usdt": {"address": "0x88b8E2161DEDC77EF4ab7585569D2415a1C1055D", "decimals": 6},
+    "usdc": {"address": "0xf817257fed379853cDe0fa4F97AB987181B1E5Ea", "decimals": 6},
+    "weth": {"address": "0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37", "decimals": 18},
+    "wbtc": {"address": "0xcf5a6076cfa32686c0Df13aBaDa2b40dec133F1d", "decimals": 8},
+    "seth": {"address": "0x836047a99e11F376522B447bffb6e3495Dd0637c", "decimals": 18},
 }
 
-# Khởi tạo web3 provider
-w3 = Web3(Web3.HTTPProvider(RPC_URL))
-
-# Kiểm tra kết nối
-if not w3.is_connected():
-    print(f"{Fore.RED}❌ Không kết nối được với RPC{Style.RESET_ALL}")
-    exit(1)
-
-# ABI cho Ambient DEX và Token
-AMBIENT_ABI = [
+ERC20_ABI = [
     {
-        "constant": False,
-        "inputs": [
-            {"name": "base", "type": "address"},
-            {"name": "quote", "type": "address"},
-            {"name": "poolIdx", "type": "uint256"},
-            {"name": "isBuy", "type": "bool"},
-            {"name": "inBaseQty", "type": "bool"},
-            {"name": "qty", "type": "uint128"},
-            {"name": "tip", "type": "uint16"},
-            {"name": "limitPrice", "type": "uint128"},
-            {"name": "minOut", "type": "uint128"},
-            {"name": "reserveFlags", "type": "uint8"}
-        ],
-        "name": "swap",
-        "outputs": [
-            {"name": "baseFlow", "type": "int128"},
-            {"name": "quoteFlow", "type": "int128"}
-        ],
-        "payable": True,
-        "stateMutability": "payable",
-        "type": "function"
+        "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
+        "name": "balanceOf",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function",
     },
     {
-        "constant": False,
         "inputs": [
-            {"name": "callpath", "type": "uint16"},
-            {"name": "cmd", "type": "bytes"}
-        ],
-        "name": "userCmd",
-        "outputs": [{"name": "", "type": "bytes"}],
-        "payable": True,
-        "stateMutability": "payable",
-        "type": "function"
-    }
-]
-TOKEN_ABI = [
-    {
-        "constant": False,
-        "inputs": [
-            {"name": "spender", "type": "address"},
-            {"name": "amount", "type": "uint256"}
+            {"internalType": "address", "name": "spender", "type": "address"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"},
         ],
         "name": "approve",
-        "outputs": [{"name": "", "type": "bool"}],
-        "payable": False,
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
-        "constant": True,
         "inputs": [
-            {"name": "owner", "type": "address"},
-            {"name": "spender", "type": "address"}
+            {"internalType": "address", "name": "owner", "type": "address"},
+            {"internalType": "address", "name": "spender", "type": "address"},
         ],
         "name": "allowance",
-        "outputs": [{"name": "", "type": "uint256"}],
-        "payable": False,
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
+]
+
+AMBIENT_ABI = [
     {
-        "constant": True,
-        "inputs": [],
-        "name": "decimals",
-        "outputs": [{"name": "", "type": "uint8"}],
-        "payable": False,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": True,
-        "inputs": [],
-        "name": "symbol",
-        "outputs": [{"name": "", "type": "string"}],
-        "payable": False,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": True,
-        "inputs": [{"name": "account", "type": "address"}],
-        "name": "balanceOf",
-        "outputs": [{"name": "", "type": "uint256"}],
-        "payable": False,
-        "stateMutability": "view",
-        "type": "function"
+        "inputs": [
+            {"internalType": "uint16", "name": "callpath", "type": "uint16"},
+            {"internalType": "bytes", "name": "cmd", "type": "bytes"},
+        ],
+        "name": "userCmd",
+        "outputs": [{"internalType": "bytes", "name": "", "type": "bytes"}],
+        "stateMutability": "payable",
+        "type": "function",
     }
 ]
 
-# Hàm đọc private key từ pvkey.txt
-def load_private_keys(file_path='pvkey.txt'):
-    try:
-        with open(file_path, 'r') as file:
-            keys = [line.strip() for line in file.readlines() if line.strip()]
-            if not keys:
-                raise ValueError("File pvkey.txt rỗng")
-            return keys
-    except FileNotFoundError:
-        print(f"{Fore.RED}❌ Không tìm thấy file pvkey.txt{Style.RESET_ALL}")
-        return None
-    except Exception as e:
-        print(f"{Fore.RED}❌ Lỗi đọc file pvkey.txt: {str(e)}{Style.RESET_ALL}")
-        return None
-
-# Hàm hiển thị viền đẹp
-def print_border(text, color=Fore.CYAN, width=60):
+# Hàm hiển thị viền đẹp mắt
+def print_border(text: str, color=Fore.CYAN, width=BORDER_WIDTH):
+    text = text.strip()
+    if len(text) > width - 4:
+        text = text[:width - 7] + "..."
+    padded_text = f" {text} ".center(width - 2)
     print(f"{color}┌{'─' * (width - 2)}┐{Style.RESET_ALL}")
-    print(f"{color}│ {text:^56} │{Style.RESET_ALL}")
+    print(f"{color}│{padded_text}│{Style.RESET_ALL}")
     print(f"{color}└{'─' * (width - 2)}┘{Style.RESET_ALL}")
 
-# Hàm hiển thị bước
-def print_step(step, message, language):
+# Hàm hiển thị bước với định dạng đẹp
+def print_step(step: str, message: str, lang: str):
     steps = {
-        'vi': {'approve': 'Phê duyệt', 'swap': 'Swap'},
-        'en': {'approve': 'Approve', 'swap': 'Swap'}
+        'vi': {
+            'balance': 'SỐ DƯ',
+            'faucet': 'LẤY TOKEN',
+            'approve': 'PHÊ DUYỆT',
+            'swap': 'HOÁN ĐỔI'
+        },
+        'en': {
+            'balance': 'BALANCE',
+            'faucet': 'GET TOKENS',
+            'approve': 'APPROVE',
+            'swap': 'SWAP'
+        }
     }
-    lang = steps[language]
-    step_text = lang.get(step, step)
-    print(f"{Fore.YELLOW}➤ {Fore.CYAN}{step_text:<15}{Style.RESET_ALL} | {message}")
+    step_text = steps[lang][step]
+    formatted_step = f"{Fore.YELLOW}🔸 {Fore.CYAN}{step_text:<15}{Style.RESET_ALL}"
+    print(f"{formatted_step} | {message}")
 
-# Tạo số lượng ngẫu nhiên giữa min và max
-def get_random_amount(min_val, max_val):
-    amount = random.uniform(min_val, max_val)
-    return round(amount, 8)
-
-# Phê duyệt token
-async def approve_token(private_key, token_address, amount, decimals, language):
-    account = w3.eth.account.from_key(private_key)
-    wallet = account.address[:8] + "..."
+# Hàm hiển thị thông báo hoàn tất song ngữ
+def print_completion_message(accounts: int, language: str, success_count: int):
     lang = {
         'vi': {
-            'check': "Đang kiểm tra phê duyệt token...",
-            'approve': "Đang phê duyệt",
-            'success': "Phê duyệt thành công",
-            'fail': "Phê duyệt thất bại"
+            'title': "AMBIENT SWAP - MONAD TESTNET",
+            'done': "HOÀN TẤT",
+            'accounts': "TÀI KHOẢN",
+            'success': "GIAO DỊCH THÀNH CÔNG",
+            'start_msg': f"Đã hoàn tất hoán đổi cho {accounts} tài khoản",
         },
         'en': {
-            'check': "Checking token approval...",
-            'approve': "Approving",
-            'success': "Approved successfully",
-            'fail': "Approval failed"
+            'title': "AMBIENT SWAP - MONAD TESTNET",
+            'done': "ALL DONE",
+            'accounts': "ACCOUNTS",
+            'success': "SUCCESSFUL TRANSACTIONS",
+            'start_msg': f"Completed swap for {accounts} accounts",
         }
     }[language]
 
-    token_contract = w3.eth.contract(address=token_address, abi=TOKEN_ABI)
-    try:
-        print_step('approve', lang['check'], language)
-        allowance = await asyncio.get_event_loop().run_in_executor(None, lambda: token_contract.functions.allowance(account.address, ROUTER_ADDRESS).call())
-        amount_in_decimals = w3.to_wei(amount, 'ether') if decimals == 18 else int(amount * 10**decimals)
+    print(f"{Fore.GREEN}{'═' * BORDER_WIDTH}{Style.RESET_ALL}")
+    print_border(f" {lang['title']} ", Fore.GREEN)
+    print(f"{Fore.GREEN}{'═' * BORDER_WIDTH}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}🎉 {lang['start_msg']:^76}{Style.RESET_ALL}")
+    completion_msg = f"{lang['done']} - {accounts} {lang['accounts']}"
+    print_border(completion_msg, Fore.GREEN)
+    success_msg = f"{lang['success']}: {success_count}"
+    print_border(success_msg, Fore.CYAN)
+    print(f"{Fore.GREEN}{'═' * BORDER_WIDTH}{Style.RESET_ALL}")
 
-        # Kiểm tra số dư trước khi phê duyệt
-        balance = await asyncio.get_event_loop().run_in_executor(None, lambda: token_contract.functions.balanceOf(account.address).call())
-        if balance < amount_in_decimals:
-            raise Exception(f"Không đủ số dư {TOKENS[token_address]['symbol']} ({balance / 10**decimals} < {amount})")
+class AmbientDex:
+    def __init__(self, account_index: int, private_key: str, session: aiohttp.ClientSession, language: str):
+        self.account_index = account_index
+        self.web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(RPC_URL))
+        self.account = Account.from_key(private_key)
+        self.session = session
+        self.language = language
+        self.router_contract = self.web3.eth.contract(address=AMBIENT_CONTRACT, abi=AMBIENT_ABI)
 
-        if allowance < amount_in_decimals:
-            print_step('approve', f"{lang['approve']} {wallet}...", language)
-            tx = token_contract.functions.approve(ROUTER_ADDRESS, 2**256 - 1).build_transaction({
-                'from': account.address,
-                'gas': 300000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(account.address),
-            })
-            signed_tx = w3.eth.account.sign_transaction(tx, private_key)
-            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-            await asyncio.sleep(1)
-            receipt = await asyncio.get_event_loop().run_in_executor(None, lambda: w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300))
-            if receipt.status == 0:
-                raise Exception("Phê duyệt thất bại trên blockchain")
-            print_step('approve', f"{Fore.GREEN}{lang['success']}{Style.RESET_ALL}", language)
-        else:
-            print_step('approve', f"{Fore.GREEN}Đã phê duyệt trước đó / Already approved{Style.RESET_ALL}", language)
-    except Exception as e:
-        print_step('approve', f"{Fore.RED}{lang['fail']}: {str(e)}{Style.RESET_ALL}", language)
-        raise
-
-# Thử lại thao tác nếu thất bại
-async def retry_operation(operation, max_retries=3, delay=5):
-    for i in range(max_retries):
-        try:
-            return await operation()
-        except Exception as e:
-            if "SERVER_ERROR" in str(e) or "bad response" in str(e):
-                if i < max_retries - 1:
-                    print(f"{Fore.YELLOW}❌ Lỗi RPC, thử lại sau {delay} giây... (Lần {i + 1}/{max_retries}){Style.RESET_ALL}")
-                    await asyncio.sleep(delay)
-                    continue
-            raise e
-    raise Exception("Đã vượt quá số lần thử lại tối đa")
-
-# Swap token
-async def swap_tokens(private_key, from_token, to_token, amount, language):
-    account = w3.eth.account.from_key(private_key)
-    wallet = account.address[:8] + "..."
-    lang = {
-        'vi': {
-            'start': f"Đang swap {amount} {from_token['symbol']} sang {to_token['symbol']}",
-            'send': "Đang gửi giao dịch...",
-            'success': "Swap thành công!",
-            'transfer': "Chuyển token thành công!",
-            'fail': "Swap thất bại"
-        },
-        'en': {
-            'start': f"Swapping {amount} {from_token['symbol']} to {to_token['symbol']}",
-            'send': "Sending transaction...",
-            'success': "Swap successful!",
-            'transfer': "Tokens transferred successfully!",
-            'fail': "Swap failed"
+    async def get_gas_params(self) -> Dict[str, int]:
+        """Lấy thông số gas từ mạng."""
+        latest_block = await self.web3.eth.get_block('latest')
+        base_fee = latest_block['baseFeePerGas']
+        max_priority_fee = await self.web3.eth.max_priority_fee
+        return {
+            "maxFeePerGas": base_fee + max_priority_fee,
+            "maxPriorityFeePerGas": max_priority_fee,
         }
-    }[language]
 
-    try:
-        print_border(f"{lang['start']} | {wallet}")
-        amount_in = w3.to_wei(amount, 'ether') if from_token['decimals'] == 18 else int(amount * 10**from_token['decimals'])
+    def convert_to_wei(self, amount: float, token: str) -> int:
+        """Chuyển đổi số lượng sang wei dựa trên số thập phân của token."""
+        if token == "native":
+            return self.web3.to_wei(amount, 'ether')
+        decimals = AMBIENT_TOKENS[token.lower()]["decimals"]
+        return int(Decimal(str(amount)) * Decimal(str(10 ** decimals)))
 
-        # Kiểm tra số dư trước khi swap
-        if from_token['symbol'] == "MON":
-            mon_balance = await asyncio.get_event_loop().run_in_executor(None, lambda: w3.eth.get_balance(account.address))
-            if mon_balance < amount_in:
-                raise Exception(f"Không đủ số dư MON ({w3.from_wei(mon_balance, 'ether')} < {amount})")
-        else:
-            token_contract = w3.eth.contract(address=from_token['address'], abi=TOKEN_ABI)
-            balance = await asyncio.get_event_loop().run_in_executor(None, lambda: token_contract.functions.balanceOf(account.address).call())
-            if balance < amount_in:
-                raise Exception(f"Không đủ số dư {from_token['symbol']} ({balance / 10**from_token['decimals']} < {amount})")
-            await retry_operation(lambda: approve_token(private_key, from_token['address'], amount, from_token['decimals'], language))
+    def convert_from_wei(self, amount: int, token: str) -> float:
+        """Chuyển đổi từ wei về đơn vị token."""
+        if token == "native":
+            return float(self.web3.from_wei(amount, 'ether'))
+        decimals = AMBIENT_TOKENS[token.lower()]["decimals"]
+        return float(Decimal(str(amount)) / Decimal(str(10 ** decimals)))
 
-        ambient_contract = w3.eth.contract(address=ROUTER_ADDRESS, abi=AMBIENT_ABI)
-        if from_token['symbol'] == "MON":
-            # Swap từ MON sang token
-            tx = ambient_contract.functions.swap(
-                WMON_CONTRACT,  # base
-                to_token['address'],  # quote
-                36000,  # poolIdx
-                True,  # isBuy (mua token bằng MON)
-                True,  # inBaseQty (số lượng tính bằng base token)
-                amount_in,  # qty
-                0,  # tip
-                0,  # limitPrice (không giới hạn)
-                0,  # minOut (không yêu cầu tối thiểu, cần điều chỉnh nếu có slippage)
-                0  # reserveFlags
-            ).build_transaction({
-                'from': account.address,
-                'value': amount_in,
-                'gas': 250000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(account.address),
-            })
-        elif to_token['symbol'] == "MON":
-            # Swap từ token sang MON
-            tx = ambient_contract.functions.swap(
-                from_token['address'],  # base
-                WMON_CONTRACT,  # quote
-                36000,  # poolIdx
-                False,  # isBuy (bán token lấy MON)
-                True,  # inBaseQty (số lượng tính bằng base token)
-                amount_in,  # qty
-                0,  # tip
-                0,  # limitPrice (không giới hạn)
-                0,  # minOut (không yêu cầu tối thiểu, cần điều chỉnh nếu có slippage)
-                0  # reserveFlags
-            ).build_transaction({
-                'from': account.address,
-                'gas': 350000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(account.address),
-            })
-        else:
-            # Swap giữa hai token
-            cmd_data = w3.codec.encode(
-                ["uint256", "address", "uint24", "bool", "bool", "uint128", "uint16", "uint128", "uint128", "uint8"],
-                [0, from_token['address'], 36000, True, True, amount_in, 0, w3.to_wei(100000, 'ether'), 0, 0]
-            )
-            tx = ambient_contract.functions.userCmd(1, cmd_data).build_transaction({
-                'from': account.address,
-                'gas': 500000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(account.address),
-            })
-
-        print_step('swap', lang['send'], language)
-        signed_tx = w3.eth.account.sign_transaction(tx, private_key)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        print_step('swap', f"{Fore.CYAN}Mã giao dịch / Tx: {EXPLORER_URL}{tx_hash.hex()}{Style.RESET_ALL}", language)
-        await asyncio.sleep(1)
-        receipt = await asyncio.get_event_loop().run_in_executor(None, lambda: w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300))
-
-        if receipt.status == 1:
-            print_step('swap', f"{Fore.GREEN}{lang['success']}{Style.RESET_ALL}", language)
-            transfer_events = [log for log in receipt.logs if log['topics'][0].hex() == '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef']
-            if transfer_events:
-                print_step('swap', f"{Fore.GREEN}{lang['transfer']}{Style.RESET_ALL}", language)
-        else:
-            # Giải mã lỗi revert nếu có
+    async def get_tokens_with_balance(self) -> List[Tuple[str, float]]:
+        """Lấy danh sách token có số dư lớn hơn 0."""
+        tokens_with_balance = []
+        
+        # Kiểm tra số dư native token (MON)
+        native_balance = await self.web3.eth.get_balance(self.account.address)
+        if native_balance > 0:
+            native_amount = self.convert_from_wei(native_balance, "native")
+            tokens_with_balance.append(("native", native_amount))
+        
+        # Kiểm tra số dư các token khác
+        for token in AMBIENT_TOKENS:
             try:
-                tx_details = await asyncio.get_event_loop().run_in_executor(None, lambda: w3.eth.get_transaction(tx_hash))
-                revert_reason = await asyncio.get_event_loop().run_in_executor(None, lambda: w3.eth.call(tx_details))
-                error_msg = w3.to_text(revert_reason[4:]) if revert_reason.startswith('0x08c379a0') else revert_reason.hex()
-                raise Exception(f"Giao dịch thất bại: {error_msg}")
-            except Exception as revert_error:
-                raise Exception(f"Giao dịch thất bại: {str(revert_error)}")
-    except Exception as e:
-        print_step('swap', f"{Fore.RED}{lang['fail']}: {str(e)}{Style.RESET_ALL}", language)
-        raise
+                token_contract = self.web3.eth.contract(
+                    address=self.web3.to_checksum_address(AMBIENT_TOKENS[token]["address"]),
+                    abi=ERC20_ABI
+                )
+                balance = await token_contract.functions.balanceOf(self.account.address).call()
+                if balance > 0:
+                    amount = self.convert_from_wei(balance, token)
+                    # Bỏ qua SETH và WETH nếu số dư quá thấp
+                    if token.lower() in ["seth", "weth"] and amount < 0.001:
+                        continue
+                    tokens_with_balance.append((token, amount))
+            except Exception as e:
+                logger.error(f"[{self.account_index}] Failed to get balance for {token}: {str(e)}")
+                continue
+        
+        return tokens_with_balance
 
-# Kiểm tra số dư
-async def check_balance(wallet_address, language):
-    lang = {
-        'vi': {"title": "Số dư", "error": "Lỗi đọc số dư"},
-        'en': {"title": "Balance", "error": "Error reading balance"}
-    }[language]
+    async def generate_swap_data(self, token_in: str, token_out: str, amount_in_wei: int) -> Dict:
+        """Tạo dữ liệu giao dịch swap cho Ambient DEX."""
+        for retry in range(ATTEMPTS):
+            try:
+                is_native = token_in == "native"
+                token_address = (
+                    AMBIENT_TOKENS[token_out.lower()]["address"] if is_native 
+                    else AMBIENT_TOKENS[token_in.lower()]["address"]
+                )
+                encode_data = abi.encode(
+                    ['address', 'address', 'uint16', 'bool', 'bool', 'uint256', 'uint8', 'uint256', 'uint256', 'uint8'],
+                    [
+                        ZERO_ADDRESS,
+                        self.web3.to_checksum_address(token_address),
+                        POOL_IDX,
+                        is_native,
+                        is_native,
+                        amount_in_wei,
+                        TIP,
+                        MAX_SQRT_PRICE if is_native else MIN_SQRT_PRICE,
+                        0,
+                        RESERVE_FLAGS
+                    ]
+                )
+                function_selector = self.web3.keccak(text="userCmd(uint16,bytes)")[:4]
+                cmd_params = abi.encode(['uint16', 'bytes'], [1, encode_data])
+                tx_data = function_selector.hex() + cmd_params.hex()
 
-    print(f"\n{Fore.CYAN}💰 {lang['title']}:{Style.RESET_ALL}")
+                gas_estimate = await self.web3.eth.estimate_gas({
+                    'to': AMBIENT_CONTRACT,
+                    'from': self.account.address,
+                    'data': '0x' + tx_data,
+                    'value': amount_in_wei if is_native else 0
+                })
+
+                return {
+                    "to": AMBIENT_CONTRACT,
+                    "data": '0x' + tx_data,
+                    "value": amount_in_wei if is_native else 0,
+                    "gas": int(gas_estimate * 1.1)
+                }
+            except Exception as e:
+                await self._handle_error("generate_swap_data", e)
+        raise Exception("Failed to generate swap data after retries")
+
+    async def execute_transaction(self, tx_data: Dict) -> str:
+        """Thực hiện giao dịch và chờ xác nhận."""
+        for retry in range(ATTEMPTS):
+            try:
+                nonce = await self.web3.eth.get_transaction_count(self.account.address)
+                gas_params = await self.get_gas_params()
+                transaction = {
+                    "from": self.account.address,
+                    "nonce": nonce,
+                    "type": 2,
+                    "chainId": 10143,
+                    **tx_data,
+                    **gas_params,
+                }
+                signed_txn = self.web3.eth.account.sign_transaction(transaction, self.account.key)
+                tx_hash = await self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                print_step('swap', "Waiting for transaction confirmation...", self.language)
+                receipt = await self.web3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=2)
+                if receipt['status'] == 1:
+                    logger.success(f"[{self.account_index}] Transaction successful! TX: {EXPLORER_URL}{tx_hash.hex()}")
+                    return tx_hash.hex()
+                else:
+                    raise Exception(f"Transaction failed: {EXPLORER_URL}{tx_hash.hex()}")
+            except Exception as e:
+                await self._handle_error("execute_transaction", e)
+        raise Exception("Transaction execution failed after retries")
+
+    async def approve_token(self, token: str, amount: int) -> Optional[str]:
+        """Phê duyệt token cho Ambient DEX."""
+        for retry in range(ATTEMPTS):
+            try:
+                token_contract = self.web3.eth.contract(
+                    address=self.web3.to_checksum_address(AMBIENT_TOKENS[token.lower()]["address"]),
+                    abi=ERC20_ABI
+                )
+                current_allowance = await token_contract.functions.allowance(
+                    self.account.address, AMBIENT_CONTRACT
+                ).call()
+                if current_allowance >= amount:
+                    logger.info(f"[{self.account_index}] Allowance sufficient for {token}")
+                    return None
+
+                nonce = await self.web3.eth.get_transaction_count(self.account.address)
+                gas_params = await self.get_gas_params()
+                approve_tx = await token_contract.functions.approve(
+                    AMBIENT_CONTRACT, amount
+                ).build_transaction({
+                    'from': self.account.address,
+                    'nonce': nonce,
+                    'type': 2,
+                    'chainId': 10143,
+                    **gas_params,
+                })
+                signed_txn = self.web3.eth.account.sign_transaction(approve_tx, self.account.key)
+                tx_hash = await self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                print_step('approve', f"Approving {self.convert_from_wei(amount, token):.4f} {token.upper()}...", self.language)
+                receipt = await self.web3.eth.wait_for_transaction_receipt(tx_hash, poll_latency=2)
+                if receipt['status'] == 1:
+                    logger.success(f"[{self.account_index}] Approval successful! TX: {EXPLORER_URL}{tx_hash.hex()}")
+                    print_step('approve', f"{Fore.GREEN}✔ Approved! TX: {EXPLORER_URL}{tx_hash.hex()}{Style.RESET_ALL}", self.language)
+                    return tx_hash.hex()
+                raise Exception("Approval failed")
+            except Exception as e:
+                await self._handle_error("approve_token", e)
+        raise Exception(f"Failed to approve {token} after retries")
+
+    async def swap(self, percentage_to_swap: float = 100.0, swap_type: str = "regular") -> Optional[str]:
+        """Thực hiện swap trên Ambient DEX."""
+        for retry in range(ATTEMPTS):
+            try:
+                tokens_with_balance = await self.get_tokens_with_balance()
+                if not tokens_with_balance:
+                    print_step('swap', f"{Fore.RED}✘ No tokens with balance found{Style.RESET_ALL}", self.language)
+                    return None
+
+                if swap_type == "collect":
+                    tokens_to_swap = [(t, b) for t, b in tokens_with_balance if t != "native"]
+                    if not tokens_to_swap:
+                        print_step('swap', f"{Fore.YELLOW}⚠ No tokens to collect to native{Style.RESET_ALL}", self.language)
+                        return None
+
+                    for token_in, balance in tokens_to_swap:
+                        try:
+                            if token_in.lower() == "seth":
+                                leave_amount = random.uniform(0.00001, 0.0001)
+                                balance -= leave_amount
+                            amount_wei = self.convert_to_wei(balance, token_in)
+                            await self.approve_token(token_in, amount_wei)
+                            await asyncio.sleep(random.uniform(*PAUSE_BETWEEN_SWAPS))
+                            print_step('swap', f"Swapping {balance:.4f} {token_in.upper()} to MON...", self.language)
+                            tx_data = await self.generate_swap_data(token_in, "native", amount_wei)
+                            tx_hash = await self.execute_transaction(tx_data)
+                            if token_in != tokens_to_swap[-1][0]:
+                                await asyncio.sleep(random.uniform(5, 10))
+                        except Exception as e:
+                            logger.error(f"[{self.account_index}] Failed to collect {token_in} to native: {str(e)}")
+                            continue
+                    print_step('swap', f"{Fore.GREEN}✔ Collection to native completed{Style.RESET_ALL}", self.language)
+                    return "Collection complete"
+
+                else:  # Regular swap
+                    token_in, balance = random.choice(tokens_with_balance)
+                    available_out_tokens = list(AMBIENT_TOKENS.keys()) + ["native"]
+                    available_out_tokens.remove(token_in)
+                    token_out = random.choice(available_out_tokens)
+
+                    if token_in == "native":
+                        percentage = Decimal(str(percentage_to_swap)) / Decimal('100')
+                        amount_wei = int(Decimal(str(self.convert_to_wei(balance, "native"))) * percentage)
+                        amount_token = self.convert_from_wei(amount_wei, "native")
+                    else:
+                        if token_in.lower() == "seth":
+                            leave_amount = random.uniform(0.00001, 0.0001)
+                            balance -= leave_amount
+                        amount_wei = self.convert_to_wei(balance, token_in)
+                        amount_token = balance
+                        await self.approve_token(token_in, amount_wei)
+                        await asyncio.sleep(random.uniform(*PAUSE_BETWEEN_SWAPS))
+
+                    print_step('swap', f"Swapping {amount_token:.4f} {token_in.upper()} to {token_out.upper()}...", self.language)
+                    tx_data = await self.generate_swap_data(token_in, token_out, amount_wei)
+                    return await self.execute_transaction(tx_data)
+
+            except Exception as e:
+                await self._handle_error("swap", e)
+        print_step('swap', f"{Fore.RED}✘ Swap failed after {ATTEMPTS} attempts{Style.RESET_ALL}", self.language)
+        return None
+
+    async def _handle_error(self, action: str, error: Exception) -> None:
+        """Xử lý lỗi với pause ngẫu nhiên."""
+        pause = random.uniform(*PAUSE_BETWEEN_ACTIONS)
+        logger.error(f"[{self.account_index}] Error in {action}: {error}. Sleeping for {pause:.2f}s")
+        print_step(action, f"{Fore.RED}✘ Error: {str(error)}. Retrying in {pause:.2f}s{Style.RESET_ALL}", self.language)
+        await asyncio.sleep(pause)
+
+async def run(language: str) -> None:
+    """Chạy script Ambient với nhiều private keys từ pvkey.txt."""
     try:
-        mon_balance = await asyncio.get_event_loop().run_in_executor(None, lambda: w3.eth.get_balance(wallet_address))
-        print(f"{Fore.CYAN}MON: {w3.from_wei(mon_balance, 'ether')}{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"{Fore.RED}MON: {lang['error']} - {str(e)}{Style.RESET_ALL}")
-
-    for symbol, token in TOKENS.items():
-        try:
-            token_contract = w3.eth.contract(address=token['address'], abi=TOKEN_ABI)
-            balance = await asyncio.get_event_loop().run_in_executor(None, lambda: token_contract.functions.balanceOf(wallet_address).call())
-            print(f"{Fore.CYAN}{symbol}: {balance / 10**token['decimals']}{Style.RESET_ALL}")
-        except Exception as e:
-            print(f"{Fore.RED}{symbol}: {lang['error']} - {str(e)}{Style.RESET_ALL}")
-
-# Thực hiện random swap
-async def perform_random_swap(private_key, language):
-    token_symbols = list(TOKENS.keys())
-    from_symbol = "MON" if random.random() < 0.5 else random.choice(token_symbols)
-    to_symbol = random.choice([s for s in token_symbols if s != from_symbol])
-    from_token = TOKENS[from_symbol] if from_symbol != "MON" else {"symbol": "MON", "decimals": 18}
-    to_token = TOKENS[to_symbol]
-    amount = get_random_amount(from_token.get('minAmount', 0.001), from_token.get('maxAmount', 0.01))
-    amount = max(amount, from_token.get('minAmount', 0.001))
-
-    lang = {
-        'vi': f"Random swap {from_symbol} sang {to_symbol}: {amount} {from_symbol}",
-        'en': f"Random swap {from_symbol} to {to_symbol}: {amount} {from_symbol}"
-    }[language]
-
-    print(f"\n{Fore.YELLOW}🎲 {lang}{Style.RESET_ALL}")
-    await swap_tokens(private_key, from_token, to_token, amount, language)
-
-# Thực hiện manual swap
-async def perform_manual_swap(private_key, from_symbol, to_symbol, amount, language):
-    from_token = TOKENS[from_symbol] if from_symbol != "MON" else {"symbol": "MON", "decimals": 18}
-    to_token = TOKENS[to_symbol]
-    lang = {
-        'vi': f"Manual swap {from_symbol} sang {to_symbol}: {amount} {from_symbol}",
-        'en': f"Manual swap {from_symbol} to {to_symbol}: {amount} {from_symbol}"
-    }[language]
-
-    print(f"\n{Fore.YELLOW}🎲 {lang}{Style.RESET_ALL}")
-    await swap_tokens(private_key, from_token, to_token, amount, language)
-
-# Hàm chính
-async def run(language):
-    print(f"{Fore.GREEN}{'═' * 60}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}│ {'AMBIENT SWAP BOT - MONAD TESTNET':^56} │{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{'═' * 60}{Style.RESET_ALL}")
-
-    private_keys = load_private_keys('pvkey.txt')
-    if not private_keys:
+        with open("pvkey.txt", "r") as f:
+            private_keys = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        logger.error("File pvkey.txt not found!")
+        print_border("ERROR: pvkey.txt not found!", Fore.RED)
         return
 
-    print(f"{Fore.CYAN}👥 {'Tài khoản' if language == 'vi' else 'Accounts'}: {len(private_keys)}{Style.RESET_ALL}")
+    if not private_keys:
+        logger.error("No private keys found in pvkey.txt!")
+        print_border("ERROR: No private keys found in pvkey.txt!", Fore.RED)
+        return
 
-    choices = [
-        {"title": "Swap Ngẫu Nhiên" if language == 'vi' else "Random Swap", "value": "random_swap"},
-        {"title": "Swap Thủ Công" if language == 'vi' else "Manual Swap", "value": "manual_swap"},
-        {"title": "Thoát" if language == 'vi' else "Exit", "value": "exit"}
-    ]
+    # Hiển thị tiêu đề mở đầu
+    print(f"{Fore.GREEN}{'═' * BORDER_WIDTH}{Style.RESET_ALL}")
+    print_border("AMBIENT SWAP - MONAD TESTNET", Fore.GREEN)
+    print(f"{Fore.GREEN}{'═' * BORDER_WIDTH}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}👥 {'Tài khoản / Accounts'}: {len(private_keys):^76}{Style.RESET_ALL}")
 
-    for idx, private_key in enumerate(private_keys, 1):
-        wallet_short = w3.eth.account.from_key(private_key).address[:8] + "..."
-        print_border(f"TÀI KHOẢN / ACCOUNT {idx}/{len(private_keys)} | {wallet_short}", Fore.CYAN)
-        await check_balance(w3.eth.account.from_key(private_key).address, language)
+    success_count = 0
+    async with aiohttp.ClientSession() as session:
+        for idx, private_key in enumerate(private_keys, start=1):
+            wallet_short = Account.from_key(private_key).address[:8] + "..."
+            account_msg = f"ACCOUNT {idx}/{len(private_keys)} - {wallet_short}"
+            print_border(account_msg, Fore.BLUE)
+            ambient = AmbientDex(idx, private_key, session, language)
+            logger.info(f"Processing account {idx}/{len(private_keys)}: {ambient.account.address}")
 
-        while True:
-            print_border("LỰA CHỌN / OPTIONS", Fore.YELLOW)
-            for i, choice in enumerate(choices, 1):
-                print(f"{Fore.GREEN}{i}. {choice['title']}{Style.RESET_ALL}")
-            action = input(f"{Fore.GREEN}➤ {'Chọn hành động (1-3): ' if language == 'vi' else 'Select action (1-3): '}{Style.RESET_ALL}")
+            # Thực hiện swap
+            try:
+                tx_hash = await ambient.swap(percentage_to_swap=100.0, swap_type="regular")
+                if tx_hash:
+                    success_count += 1
+            except Exception as e:
+                logger.error(f"[{idx}] Failed to execute swap: {str(e)}")
+                print_step('swap', f"{Fore.RED}✘ Swap failed: {str(e)}{Style.RESET_ALL}", language)
 
-            if action == "3" or action.lower() == "exit":
-                break
-            elif action == "1":
-                number_of_swaps = 5
-                start_msg = f"Chạy {number_of_swaps}x random swap" if language == 'vi' else f"Starting {number_of_swaps}x random swaps"
-                print(f"{Fore.GREEN}🚀 {start_msg}{Style.RESET_ALL}")
-                for i in range(number_of_swaps):
-                    print(f"\n{Fore.YELLOW}📍 Random Swap {i + 1}/{number_of_swaps}:{Style.RESET_ALL}")
-                    await perform_random_swap(private_key, language)
-                    await check_balance(w3.eth.account.from_key(private_key).address, language)
-                    if i < number_of_swaps - 1:
-                        delay = 15
-                        print(f"{Fore.YELLOW}⏳ {'Đợi' if language == 'vi' else 'Waiting'} {delay} {'giây trước swap tiếp theo...' if language == 'vi' else 'seconds before next swap...'}{Style.RESET_ALL}")
-                        await asyncio.sleep(delay)
-            elif action == "2":
-                token_choices = ["MON"] + list(TOKENS.keys())
-                print_border("CHỌN TOKEN NGUỒN / SELECT FROM TOKEN", Fore.YELLOW)
-                for i, symbol in enumerate(token_choices, 1):
-                    name = TOKENS[symbol]['name'] if symbol != "MON" else "Monad Coin"
-                    print(f"{Fore.GREEN}{i}. {name} ({symbol}){Style.RESET_ALL}")
-                from_idx = int(input(f"{Fore.GREEN}➤ {'Chọn token nguồn (1-{len(token_choices)}): ' if language == 'vi' else 'Select from token (1-{len(token_choices)}): '}{Style.RESET_ALL}")) - 1
-                from_symbol = token_choices[from_idx]
+            # Pause giữa các tài khoản
+            if idx < len(private_keys):
+                pause = random.uniform(10, 30)
+                pause_msg = f"{'Đợi / Waiting'} {pause:.2f}s {'trước tài khoản tiếp theo... / before next account...'}"
+                print(f"{Fore.YELLOW}⏳ {pause_msg:^76}{Style.RESET_ALL}")
+                await asyncio.sleep(pause)
 
-                print_border("CHỌN TOKEN ĐÍCH / SELECT TO TOKEN", Fore.YELLOW)
-                to_choices = [s for s in token_choices if s != from_symbol]
-                for i, symbol in enumerate(to_choices, 1):
-                    name = TOKENS[symbol]['name'] if symbol != "MON" else "Monad Coin"
-                    print(f"{Fore.GREEN}{i}. {name} ({symbol}){Style.RESET_ALL}")
-                to_idx = int(input(f"{Fore.GREEN}➤ {'Chọn token đích (1-{len(to_choices)}): ' if language == 'vi' else 'Select to token (1-{len(to_choices)}): '}{Style.RESET_ALL}")) - 1
-                to_symbol = to_choices[to_idx]
-
-                from_token = TOKENS[from_symbol] if from_symbol != "MON" else {"symbol": "MON", "decimals": 18}
-                min_amount = from_token.get('minAmount', 0.001)
-                max_amount = from_token.get('maxAmount', 0.01)
-                while True:
-                    try:
-                        print_border(f"NHẬP SỐ LƯỢNG / ENTER AMOUNT ({from_symbol})", Fore.YELLOW)
-                        amount_input = float(input(f"{Fore.GREEN}➤ {'Nhập số lượng (' + str(min_amount) + '-' + str(max_amount) + '): ' if language == 'vi' else 'Enter amount (' + str(min_amount) + '-' + str(max_amount) + '): '}{Style.RESET_ALL}"))
-                        if min_amount <= amount_input <= max_amount:
-                            break
-                        print(f"{Fore.RED}❌ {'Số lượng phải từ ' + str(min_amount) + ' đến ' + str(max_amount) if language == 'vi' else 'Amount must be between ' + str(min_amount) + ' and ' + str(max_amount)}!{Style.RESET_ALL}")
-                    except ValueError:
-                        print(f"{Fore.RED}❌ {'Vui lòng nhập số hợp lệ!' if language == 'vi' else 'Please enter a valid number!'}{Style.RESET_ALL}")
-
-                await perform_manual_swap(private_key, from_symbol, to_symbol, amount_input, language)
-                await check_balance(w3.eth.account.from_key(private_key).address, language)
-            else:
-                print(f"{Fore.RED}❌ {'Lựa chọn không hợp lệ, chọn lại!' if language == 'vi' else 'Invalid choice, try again!'}{Style.RESET_ALL}")
-
-        if idx < len(private_keys):
-            delay = random.randint(60, 180)
-            print(f"\n{Fore.YELLOW}⏳ {'Đợi' if language == 'vi' else 'Waiting'} {delay / 60:.1f} {'phút trước tài khoản tiếp theo...' if language == 'vi' else 'minutes before next account...'}{Style.RESET_ALL}")
-            await asyncio.sleep(delay)
-
-    print(f"{Fore.GREEN}{'═' * 60}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}│ {'HOÀN TẤT' if language == 'vi' else 'ALL DONE'} - {len(private_keys)} {'TÀI KHOẢN' if language == 'vi' else 'ACCOUNTS'}{' ' * (40 - len(str(len(private_keys))))}│{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{'═' * 60}{Style.RESET_ALL}")
+    # Hiển thị thông báo hoàn tất
+    print_completion_message(accounts=len(private_keys), language=language, success_count=success_count)
 
 if __name__ == "__main__":
-    asyncio.run(run('vi'))
+    asyncio.run(run("vi"))  # Chạy mặc định với tiếng Anh
