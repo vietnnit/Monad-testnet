@@ -151,6 +151,7 @@ Kho lưu trữ này chứa một bộ sưu tập các tập lệnh Python đư�
 - Mở CMD hoặc Shell, sau đó chạy lệnh:
 ```sh
 git clone https://github.com/thog9/Monad-testnet.git
+```
 ```sh
 cd Monad-testnet
 ```
