@@ -1,6 +1,6 @@
 # Tập lệnh tự động hóa Monad Testnet
 
-Kho lưu trữ này chứa một bộ sưu tập các tập lệnh Python được thiết kế để tự động hóa nhiều tác vụ trên Monad Testnet, bao gồm staking, hoán đổi, triển khai hợp đồng và gửi giao dịch. Các tập lệnh được tích hợp với một tệp `main.py` trung tâm để dễ dàng điều hướng và thực thi, hỗ trợ nhiều khóa riêng và giao diện CLI thân thiện với người dùng.
+Kho lưu trữ này chứa một bộ sưu tập các tập lệnh Python được thiết kế để tự động hóa nhiều tác vụ trên Monad Testnet, bao gồm staking, hoán đổi, triển khai hợp đồng, gửi giao dịch, và các hoạt động khác như đăng ký tên miền NAD và mint NFT. Các tập lệnh được tích hợp với một tệp `main.py` trung tâm để dễ dàng điều hướng và thực thi, hỗ trợ nhiều khóa riêng và giao diện CLI thân thiện với người dùng.
 
 ## Tổng quan về tính năng
 
@@ -14,7 +14,7 @@ Kho lưu trữ này chứa một bộ sưu tập các tập lệnh Python đư�
 - **Mô tả**: Đóng vai trò là trung tâm để chọn và chạy các tập lệnh khác.
 - **Tính năng**:
   - Menu tương tác với tùy chọn chọn ngôn ngữ (Tiếng Việt/Tiếng Anh).
-  - Hỗ trợ chạy nhiều tập lệnh (`kitsu.py`, `bean.py`, `uniswap.py`, `deploy.py`, `sendtx.py`, `ambient.py`, `rubic.py`, `mono.py`, `apriori.py`, `bebop.py`, `izumi.py`, `magma.py`).
+  - Hỗ trợ chạy nhiều tập lệnh (`kitsu.py`, `bean.py`, `uniswap.py`, `deploy.py`, `sendtx.py`, `ambient.py`, `rubic.py`, `mono.py`, `apriori.py`, `bebop.py`, `izumi.py`, `magma.py`, `bima.py`, `lilchogstars.py`, `naddomains.py`).
   - Giao diện console gọn gàng với các biểu ngữ và viền đầy màu sắc.
 - **Cách dùng**: Chạy `python main.py` và chọn một tập lệnh từ menu.
 
@@ -85,7 +85,8 @@ Kho lưu trữ này chứa một bộ sưu tập các tập lệnh Python đư�
 - **Mô tả**: Tự động hóa hoán đổi MON sang USDT qua router Rubic.
 - **Tính năng**:
   - Hỗ trợ nhiều khóa riêng từ `pvkey.txt`.
-  - Chu kỳ hoán đổi có thể cấu hình với số lượng ngẫu nhiên (0.01 MON).
+  - Chu kỳ hoán đổi có thể cấu hình với số lượng cố định (0.01 MON).
+  - Wrap MON thành WMON, swap WMON sang USDT, sau đó unwrap WMON còn lại về MON.
   - Độ trễ ngẫu nhiên (1-3 phút) giữa các chu kỳ và tài khoản.
   - Theo dõi giao dịch với Tx Hash và liên kết explorer.
 - **Cách dùng**: Chọn từ menu `main.py`, nhập số chu kỳ.
@@ -140,6 +141,38 @@ Kho lưu trữ này chứa một bộ sưu tập các tập lệnh Python đư�
   - Theo dõi giao dịch với Tx Hash và liên kết explorer.
   - Đầu ra song ngữ (Tiếng Việt/Tiếng Anh).
 - **Cách dùng**: Chọn từ menu `main.py`, nhập số chu kỳ.
+
+### 14. `bima.py` - Bima Deposit
+- **Mô tả**: Tự động hóa gửi bmBTC vào hợp đồng Bima trên Monad Testnet.
+- **Tính năng**:
+  - Hỗ trợ nhiều khóa riêng từ `pvkey.txt`.
+  - Số lượng gửi ngẫu nhiên (0.01-0.05 bmBTC).
+  - Độ trễ ngẫu nhiên (1-3 phút) giữa các hành động.
+  - Theo dõi giao dịch với Tx Hash và liên kết explorer.
+  - Đầu ra song ngữ (Tiếng Việt/Tiếng Anh).
+- **Cách dùng**: Chọn từ menu `main.py`, chạy tự động cho tất cả tài khoản.
+
+### 15. `lilchogstars.py` - Mint NFT Lil Chogstars
+- **Mô tả**: Tự động hóa mint NFT Lil Chogstars trên Monad Testnet.
+- **Tính năng**:
+  - Hỗ trợ nhiều khóa riêng từ `pvkey.txt`.
+  - Mint NFT miễn phí hoặc với số lượng ngẫu nhiên nếu có phí.
+  - Độ trễ ngẫu nhiên (1-3 phút) giữa các hành động.
+  - Theo dõi giao dịch với Tx Hash và liên kết explorer.
+  - Đầu ra song ngữ (Tiếng Việt/Tiếng Anh).
+- **Cách dùng**: Chọn từ menu `main.py`, chạy tự động cho tất cả tài khoản.
+
+### 16. `naddomains.py` - Đăng ký tên miền NAD
+- **Mô tả**: Tự động hóa đăng ký tên miền NAD trên Monad Testnet.
+- **Tính năng**:
+  - Hỗ trợ nhiều khóa riêng từ `pvkey.txt`.
+  - Đăng ký tên miền ngẫu nhiên (6-12 ký tự) hoặc tên do người dùng nhập.
+  - Phí đăng ký: 1 MON (3 ký tự), 0.3 MON (4 ký tự), 0.1 MON (5+ ký tự).
+  - Kiểm tra số dư MON và tính khả dụng tên miền qua API.
+  - Độ trễ ngẫu nhiên (10-30 giây) giữa các tài khoản.
+  - Theo dõi giao dịch với Tx Hash và liên kết explorer.
+  - Đầu ra song ngữ (Tiếng Việt/Tiếng Anh).
+- **Cách dùng**: Chọn từ menu `main.py`, nhập tên miền (hoặc để trống để dùng ngẫu nhiên).
 
 ## Hướng dẫn cài đặt:
 
@@ -202,6 +235,9 @@ python main.py
 │   ├── bebop.py      # Tự động hóa wrap/unwrap Bebop (đồng bộ)
 │   ├── izumi.py      # Tự động hóa wrap/unwrap Izumi (bất đồng bộ)
 │   ├── magma.py      # Tự động hóa staking Magma
+│   ├── bima.py       # Tự động hóa gửi Bima
+│   ├── lilchogstars.py # Tự động hóa mint NFT Lil Chogstars
+│   ├── naddomains.py  # Tự động hóa đăng ký tên miền NAD
 ├── pvkey.txt         # Tệp chứa khóa riêng (tạo thủ công)
 ├── address.txt       # Tệp chứa địa chỉ người nhận (tùy chọn cho sendtx.py)
 └── README.md         # +_-
