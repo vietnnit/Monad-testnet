@@ -339,8 +339,8 @@ async def run(language):
     while True:
         try:
             print_border("🔢 SỐ VÒNG LẶP / NUMBER OF CYCLES", Fore.YELLOW)
-            cycles_input = input(f"{Fore.GREEN}➤ {'Nhập số vòng (mặc định 5): ' if language == 'vi' else 'Enter number of cycles (default 5): '}{Style.RESET_ALL}")
-            cycles = int(cycles_input) if cycles_input.strip() else 5
+            cycles_input = input(f"{Fore.GREEN}➤ {'Nhập số vòng (mặc định 1): ' if language == 'vi' else 'Enter number of cycles (default 1): '}{Style.RESET_ALL}")
+            cycles = int(cycles_input) if cycles_input.strip() else 1
             if cycles <= 0:
                 raise ValueError
             break
