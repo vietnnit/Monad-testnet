@@ -14,7 +14,7 @@ This repository contains a collection of Python scripts designed to automate var
 - **Description**: Acts as the central hub to select and run other scripts.
 - **Features**:
   - Interactive menu with language selection (Vietnamese/English).
-  - Supports running multiple scripts (`kitsu.py`, `bean.py`, `uniswap.py`, `deploy.py`, `sendtx.py`, `ambient.py`, `rubic.py`, `mono.py`, `apriori.py`, `bebop.py`, `izumi.py`, `magma.py`).
+  - Supports running multiple scripts (`kitsu.py`, `bean.py`, `uniswap.py`, `deploy.py`, `sendtx.py`, `ambient.py`, `rubic.py`, `mono.py`, `apriori.py`, `bebop.py`, `izumi.py`, `magma.py`, `bima.py`, `lilchogstars.py`, `naddomains.py`).
   - Clean console interface with colorful banners and borders.
 - **Usage**: Run `python main.py` and choose a script from the menu.
 
@@ -85,7 +85,8 @@ This repository contains a collection of Python scripts designed to automate var
 - **Description**: Automates swapping MON to USDT via the Rubic router.
 - **Features**:
   - Supports multiple private keys from `pvkey.txt`.
-  - Configurable swap cycles with random amounts (0.01 MON).
+  - Configurable swap cycles with a fixed amount (0.01 MON).
+  - Wraps MON to WMON, swaps WMON to USDT, then unwraps remaining WMON to MON.
   - Random delays (1-3 minutes) between cycles and accounts.
   - Transaction tracking with Tx Hash and explorer links.
 - **Usage**: Select from `main.py` menu, input number of cycles.
@@ -141,11 +142,42 @@ This repository contains a collection of Python scripts designed to automate var
   - Bilingual output (Vietnamese/English).
 - **Usage**: Select from `main.py` menu, input number of cycles.
 
+### 14. `bima.py` - Bima Deposit
+- **Description**: Automates depositing bmBTC into the Bima contract on Monad Testnet.
+- **Features**:
+  - Supports multiple private keys from `pvkey.txt`.
+  - Random deposit amounts (0.01-0.05 bmBTC).
+  - Random delays (1-3 minutes) between actions.
+  - Transaction tracking with Tx Hash and explorer links.
+  - Bilingual output (Vietnamese/English).
+- **Usage**: Select from `main.py` menu, runs automatically for all accounts.
+
+### 15. `lilchogstars.py` - Mint Lil Chogstars NFT
+- **Description**: Automates minting Lil Chogstars NFTs on Monad Testnet.
+- **Features**:
+  - Supports multiple private keys from `pvkey.txt`.
+  - Free NFT minting or random amounts if fees apply.
+  - Random delays (1-3 minutes) between actions.
+  - Transaction tracking with Tx Hash and explorer links.
+  - Bilingual output (Vietnamese/English).
+- **Usage**: Select from `main.py` menu, runs automatically for all accounts.
+
+### 16. `naddomains.py` - NAD Domain Registration
+- **Description**: Automates NAD domain registration on Monad Testnet.
+- **Features**:
+  - Supports multiple private keys from `pvkey.txt`.
+  - Registers random domains (6-12 characters) or user-defined names.
+  - Registration fees: 1 MON (3 characters), 0.3 MON (4 characters), 0.1 MON (5+ characters).
+  - Checks MON balance and domain availability via API.
+  - Random delays (10-30 seconds) between accounts.
+  - Transaction tracking with Tx Hash and explorer links.
+  - Bilingual output (Vietnamese/English).
+- **Usage**: Select from `main.py` menu, input domain name (or leave blank for random).
 
 ## Setup Instructions:
 
-- Python 3.7 or higher (recommended 3.9 or 3.10 due to `asyncio` usage).
-- `pip` (Python package installer)
+- **Python Version**: Python 3.7 or higher (recommended 3.9 or 3.10 due to `asyncio` usage).
+- **Installer**: `pip` (Python package installer).
 
 ## Installation
 1. **Clone this repository:**
@@ -203,7 +235,10 @@ python main.py
 │   ├── bebop.py      # Bebop Wrap/Unwrap automation (synchronous)
 │   ├── izumi.py      # Izumi Wrap/Unwrap automation (asynchronous)
 │   ├── magma.py      # Magma Staking automation
+│   ├── bima.py       # Bima Deposit automation
+│   ├── lilchogstars.py # Lil Chogstars NFT minting automation
+│   ├── naddomains.py  # NAD Domain registration automation
 ├── pvkey.txt         # Private keys file (create manually)
-├── address.txt       # Recipient addresses file (sendtx.py)
-└── README.md         # This file
+├── address.txt       # Recipient addresses file (optional for sendtx.py)
+└── README.md         # +_-
 ```
