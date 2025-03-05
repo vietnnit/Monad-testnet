@@ -67,7 +67,7 @@ def select_language():
 # Định nghĩa hàm chạy cho từng script
 async def run_rubic(language: str):
     from scripts.rubic import run as rubic_run
-    await rubic_run(language)
+    rubic_run(language)
 
 async def run_magma(language: str):
     from scripts.magma import run as magma_run
