@@ -124,6 +124,10 @@ async def run_lilchogstars(language: str):
 async def run_naddomains(language: str):
     from scripts.naddomains import run as naddomains_run
     await naddomains_run(language)
+    
+async def run_shmonad(language: str):
+    from scripts.shmonad import run as shmonad_run
+    shmonad_run(language)
 
 # Danh sách script với ánh xạ trực tiếp
 SCRIPT_MAP = {
@@ -142,6 +146,7 @@ SCRIPT_MAP = {
     "bima": run_bima,
     "lilchogstars": run_lilchogstars,
     "naddomains": run_naddomains,
+    "shmonad": run_shmonad,
     "exit": lambda language: sys.exit(0)
 }
 
@@ -163,7 +168,8 @@ def get_available_scripts(language):
             {"name": "13. Bima Deposit bmBTC x Monad Testnet", "value": "bima"},
             {"name": "14. Mint NFT Lil Chogstars x Monad Testnet", "value": "lilchogstars"},
             {"name": "15. Nad Domains x Monad Testnet", "value": "naddomains"},
-            {"name": "16. Thoát", "value": "exit"},
+            {"name": "16. Shmonad x Monad Testnet", "value": "shmonad"},
+            {"name": "17. Thoát", "value": "exit"},
         ],
         'en': [
             {"name": "1. Rubic Swap x Monad Testnet", "value": "rubic"},
@@ -181,7 +187,8 @@ def get_available_scripts(language):
             {"name": "13. Bima Deposit bmBTC x Monad Testnet", "value": "bima"},
             {"name": "14. Mint NFT Lil Chogstars x Monad Testnet", "value": "lilchogstars"},
             {"name": "15. Nad Domains x Monad Testnet", "value": "naddomains"},
-            {"name": "16. Exit", "value": "exit"},
+            {"name": "16. Shmonad x Monad Testnet", "value": "shmonad"},
+            {"name": "17. Exit", "value": "exit"},
         ]
     }
     return scripts[language]
