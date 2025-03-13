@@ -1,4 +1,6 @@
-import os
+
+import os 
+import sys 
 import random
 import asyncio
 from web3 import Web3
@@ -52,10 +54,10 @@ def print_step(step, message, lang):
     step_text = steps[lang][step]
     print(f"{Fore.YELLOW}➤ {Fore.CYAN}{step_text:<15}{Style.RESET_ALL} | {message}")
 
-# Tạo số lượng ngẫu nhiên (0.01 - 0.05 MON)
+# Tạo số lượng ngẫu nhiên (0.01 - 0.03 MON)
 def get_random_amount():
     min_val = 0.01
-    max_val = 0.05
+    max_val = 0.03
     random_amount = random.uniform(min_val, max_val)
     return w3.to_wei(round(random_amount, 4), 'ether')
 
@@ -191,7 +193,11 @@ async def run(language):
     print(f"{Fore.GREEN}│ {'MAGMA STAKING - MONAD TESTNET':^56} │{Style.RESET_ALL}")
     print(f"{Fore.GREEN}{'═' * 60}{Style.RESET_ALL}")
 
-    private_keys = load_private_keys('pvkey.txt')
+    #private_keys = load_private_keys('pvkey.txt')
+    current_directory = os.path.dirname(os.path.abspath(sys.argv[0])) 
+    #print(script_directory)
+    private_keys = load_private_keys(current_directory +'/pvkey.txt')
+
     if not private_keys:
         return
 
@@ -200,11 +206,13 @@ async def run(language):
     while True:
         try:
             print_border("SỐ VÒNG LẶP / NUMBER OF CYCLES", Fore.YELLOW)
-            cycles_input = input(f"{Fore.GREEN}➤ {'Nhập số (mặc định 1): ' if language == 'vi' else 'Enter number (default 1): '}{Style.RESET_ALL}")
-            cycles = int(cycles_input) if cycles_input.strip() else 1
-            if cycles <= 0:
-                raise ValueError
+            # cycles_input = input(f"{Fore.GREEN}➤ {'Nhập số (mặc định 1): ' if language == 'vi' else 'Enter number (default 1): '}{Style.RESET_ALL}")
+            # cycles = int(cycles_input) if cycles_input.strip() else 1
+            # if cycles <= 0:
+            #     raise ValueError
+            cycles=3
             break
+            
         except ValueError:
             print(f"{Fore.RED}❌ {'Vui lòng nhập số hợp lệ!' if language == 'vi' else 'Please enter a valid number!'}{Style.RESET_ALL}")
 
